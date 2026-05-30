@@ -20,6 +20,7 @@ import torch
 import os
 import traceback
 import re
+from transformers.generation.configuration_utils import GenerationConfig
 
 from vibevoice.modular.configuration_vibevoice import VibeVoiceConfig
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalGenerationInference
@@ -27,26 +28,31 @@ from vibevoice.modular.lora_loading import load_lora_assets
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
 from vibevoice.modular.streamer import AudioStreamer
 from transformers.utils import logging
-from transformers import set_seed
+from transformers.trainer_utils import set_seed
 
 logging.set_verbosity_info()
 logger = logging.get_logger(__name__)
 
 
 class VibeVoiceDemo:
-    def __init__(self, model_path: str, device: str = "cuda", inference_steps: int = 5, adapter_path: Optional[str] = None):
+    def __init__(self, model_path: str,  voices_dir: str, device: str = "cuda", inference_steps: int = 5, adapter_path: Optional[str] = None ):
         """Initialize the VibeVoice demo with model loading."""
         self.model_path = model_path
         self.device = device
         self.inference_steps = inference_steps
         self.adapter_path = adapter_path
+        self.voices_dir = voices_dir
+        
+        # Ensure output directory exists
+        if not os.path.exists(self.voices_dir):
+            raise Exception("No voices dir")
+            
         self.loaded_adapter_root: Optional[str] = None
         self.is_generating = False  # Track generation state
         self.stop_generation = False  # Flag to stop generation
         self.current_streamer = None  # Track current audio streamer
         self.load_model()
         self.setup_voice_presets()
-        self.load_example_scripts()  # Load example scripts
         
     def load_model(self):
         """Load the VibeVoice model and processor."""
@@ -151,7 +157,7 @@ class VibeVoiceDemo:
     
     def setup_voice_presets(self):
         """Setup voice presets by scanning the voices directory."""
-        voices_dir = os.path.join(os.path.dirname(__file__), "voices")
+        voices_dir = self.voices_dir
         
         # Check if voices directory exists
         if not os.path.exists(voices_dir):
@@ -491,6 +497,8 @@ class VibeVoiceDemo:
                 final_duration = len(complete_audio) / sample_rate
                 
                 final_log = log + f"⏱️ Generation completed in {generation_time:.2f} seconds\n"
+             
+                
                 final_log += f"🎵 Final audio duration: {final_duration:.2f} seconds\n"
                 final_log += f"📊 Total chunks: {chunk_count}\n"
                 final_log += "✨ Generation successful! Complete audio is ready.\n"
@@ -517,6 +525,8 @@ class VibeVoiceDemo:
                 final_duration = len(complete_audio) / sample_rate
                 
                 final_log = log + f"⏱️ Generation completed in {generation_time:.2f} seconds\n"
+                
+               
                 final_log += f"🎵 Final audio duration: {final_duration:.2f} seconds\n"
                 final_log += f"📊 Total chunks: {chunk_count}\n"
                 final_log += "✨ Generation successful! Complete audio is ready in the 'Complete Audio' tab.\n"
@@ -590,10 +600,9 @@ class VibeVoiceDemo:
                 max_new_tokens=None,
                 cfg_scale=cfg_scale,
                 tokenizer=self.processor.tokenizer,
-                generation_config={
-                    'do_sample': False,
-                },
-                generator=generator,
+                generation_config=GenerationConfig(
+                    do_sample=False,
+                ),
                 audio_streamer=audio_streamer,
                 stop_check_fn=check_stop_generation,  # Pass the stop check function
                 verbose=False,  # Disable verbose in streaming mode
@@ -617,56 +626,7 @@ class VibeVoiceDemo:
                 print(f"Error stopping streamer: {e}")
         print("🛑 Audio generation stop requested")
     
-    def load_example_scripts(self):
-        """Load example scripts from the text_examples directory."""
-        examples_dir = os.path.join(os.path.dirname(__file__), "text_examples")
-        self.example_scripts = []
-        
-        # Check if text_examples directory exists
-        if not os.path.exists(examples_dir):
-            print(f"Warning: text_examples directory not found at {examples_dir}")
-            return
-        
-        # Get all .txt files in the text_examples directory
-        txt_files = sorted([f for f in os.listdir(examples_dir) 
-                          if f.lower().endswith('.txt') and os.path.isfile(os.path.join(examples_dir, f))])
-        
-        for txt_file in txt_files:
-            file_path = os.path.join(examples_dir, txt_file)
-            
-            import re
-            # Check if filename contains a time pattern like "45min", "90min", etc.
-            time_pattern = re.search(r'(\d+)min', txt_file.lower())
-            if time_pattern:
-                minutes = int(time_pattern.group(1))
-                if minutes > 15:
-                    print(f"Skipping {txt_file}: duration {minutes} minutes exceeds 15-minute limit")
-                    continue
-
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    script_content = f.read().strip()
-                
-                # Remove empty lines and lines with only whitespace
-                script_content = '\n'.join(line for line in script_content.split('\n') if line.strip())
-                
-                if not script_content:
-                    continue
-                
-                # Parse the script to determine number of speakers
-                num_speakers = self._get_num_speakers_from_script(script_content)
-                
-                # Add to examples list as [num_speakers, script_content]
-                self.example_scripts.append([num_speakers, script_content])
-                print(f"Loaded example: {txt_file} with {num_speakers} speakers")
-                
-            except Exception as e:
-                print(f"Error loading example script {txt_file}: {e}")
-        
-        if self.example_scripts:
-            print(f"Successfully loaded {len(self.example_scripts)} example scripts")
-        else:
-            print("No example scripts were loaded")
+  
     
     def _get_num_speakers_from_script(self, script: str) -> int:
         """Determine the number of unique speakers in a script."""
@@ -849,7 +809,7 @@ Or paste text directly and it will auto-assign speakers.""",
                     elem_classes="audio-output",
                     streaming=True,  # Enable streaming mode
                     autoplay=True,
-                    show_download_button=False,  # Explicitly show download button
+                    buttons=[],
                     visible=True
                 )
                 
@@ -860,7 +820,7 @@ Or paste text directly and it will auto-assign speakers.""",
                     elem_classes="audio-output complete-audio-section",
                     streaming=False,  # Non-streaming mode
                     autoplay=False,
-                    show_download_button=True,  # Explicitly show download button
+                    buttons=["download"],
                     visible=False  # Initially hidden, shown when audio is ready
                 )
                 
@@ -979,39 +939,6 @@ Or paste text directly and it will auto-assign speakers.""",
             queue=False
         )
         
-        # Function to randomly select an example
-        def load_random_example():
-            """Randomly select and load an example script."""
-            import random
-            
-            # Get available examples
-            if hasattr(demo_instance, 'example_scripts') and demo_instance.example_scripts:
-                example_scripts = demo_instance.example_scripts
-            else:
-                # Fallback to default
-                example_scripts = [
-                    [2, "Speaker 0: Welcome to our AI podcast demonstration!\nSpeaker 1: Thanks for having me. This is exciting!"]
-                ]
-            
-            # Randomly select one
-            if example_scripts:
-                selected = random.choice(example_scripts)
-                num_speakers_value = selected[0]
-                script_value = selected[1]
-                
-                # Return the values to update the UI
-                return num_speakers_value, script_value
-            
-            # Default values if no examples
-            return 2, ""
-        
-        # Connect random example button
-        random_example_btn.click(
-            fn=load_random_example,
-            inputs=[],
-            outputs=[num_speakers, script_input],
-            queue=False  # Don't queue this simple operation
-        )
         
         # Add usage tips
         gr.Markdown("""
@@ -1024,34 +951,8 @@ Or paste text directly and it will auto-assign speakers.""",
         - The streaming indicator shows real-time generation progress
         """)
         
-        # Add example scripts
-        gr.Markdown("### 📚 **Example Scripts**")
         
-        # Use dynamically loaded examples if available, otherwise provide a default
-        if hasattr(demo_instance, 'example_scripts') and demo_instance.example_scripts:
-            example_scripts = demo_instance.example_scripts
-        else:
-            # Fallback to a simple default example if no scripts loaded
-            example_scripts = [
-                [1, "Speaker 1: Welcome to our AI podcast demonstration! This is a sample script showing how VibeVoice can generate natural-sounding speech."]
-            ]
         
-        gr.Examples(
-            examples=example_scripts,
-            inputs=[num_speakers, script_input],
-            label="Try these example scripts:"
-        )
-
-        # --- Risks & limitations (footer) ---
-        gr.Markdown(
-            """
-## Risks and limitations
-
-While efforts have been made to optimize it through various techniques, it may still produce outputs that are unexpected, biased, or inaccurate. VibeVoice inherits any biases, errors, or omissions produced by its base model (specifically, Qwen2.5 1.5b in this release).
-Potential for Deepfakes and Disinformation: High-quality synthetic speech can be misused to create convincing fake audio content for impersonation, fraud, or spreading disinformation. Users must ensure transcripts are reliable, check content accuracy, and avoid using generated content in misleading ways. Users are expected to use the generated content and to deploy the models in a lawful manner, in full compliance with all applicable laws and regulations in the relevant jurisdictions. It is best practice to disclose the use of AI when sharing AI-generated content.
-            """,
-            elem_classes="generation-card",  # 可选：复用卡片样式
-        )
     return interface
 
 
@@ -1109,6 +1010,12 @@ def parse_args():
         default=None,
         help="Path to a fine-tuned checkpoint directory containing LoRA adapters (optional)",
     )
+    parser.add_argument(
+        "--voices-dir",
+        type=str,
+        default="voices",
+        help="Directory for voices",
+    )
     
     return parser.parse_args()
 
@@ -1127,6 +1034,7 @@ def main():
         device=args.device,
         inference_steps=args.inference_steps,
         adapter_path=args.checkpoint_path,
+        voices_dir=args.voices_dir,
     )
     
     # Create interface
@@ -1147,8 +1055,7 @@ def main():
             share=args.share,
             # server_port=args.port,
             server_name="0.0.0.0" if args.share else "127.0.0.1",
-            show_error=True,
-            show_api=False  # Hide API docs for cleaner interface
+            show_error=True
         )
     except KeyboardInterrupt:
         print("\n🛑 Shutting down gracefully...")
