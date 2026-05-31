@@ -600,9 +600,9 @@ class VibeVoiceDemo:
                 max_new_tokens=None,
                 cfg_scale=cfg_scale,
                 tokenizer=self.processor.tokenizer,
-                generation_config=GenerationConfig(
-                    do_sample=False,
-                ),
+                generation_config={
+                    "do_sample" : False,
+                },
                 audio_streamer=audio_streamer,
                 stop_check_fn=check_stop_generation,  # Pass the stop check function
                 verbose=False,  # Disable verbose in streaming mode
@@ -809,7 +809,8 @@ Or paste text directly and it will auto-assign speakers.""",
                     elem_classes="audio-output",
                     streaming=True,  # Enable streaming mode
                     autoplay=True,
-                    buttons=[],
+                    buttons=["download"],
+                    
                     visible=True
                 )
                 
