@@ -938,7 +938,7 @@ Or paste text directly and it will auto-assign speakers.""",
         # Add a clear audio function
         def clear_audio_outputs():
             """Clear both audio outputs before starting new generation."""
-            return None, gr.update(value=None, visible=False)
+            return None, None, gr.update(value=None, visible=False)
 
         # Connect generation button with streaming outputs
         generate_btn.click(
