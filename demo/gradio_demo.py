@@ -20,6 +20,8 @@ import torch
 import os
 import traceback
 import re
+import collections
+from collections import deque
 from transformers.generation.configuration_utils import GenerationConfig
 
 from vibevoice.modular.configuration_vibevoice import VibeVoiceConfig
@@ -277,6 +279,17 @@ class VibeVoiceDemo:
                 sf.write(out_path, np.asarray(audio_int16, dtype=np.int16), sample_rate, subtype="PCM_16")
                 return out_path
 
+            def _write_incomplete_wav(audio_int16: np.ndarray, sample_rate: int = 24000) -> str:
+                ts = datetime.now().strftime("%Y%m%d%H%M%S")
+                speakers_part = _sanitize_filename_part("-".join(selected_speakers) if selected_speakers else "speaker")
+                cfg_part = _sanitize_filename_part(f"{cfg_scale:.2f}")
+                seed_part = str(resolved_seed) if resolved_seed is not None else "rand"
+                # Requested pattern: yyyyMMddhhmmss_[speaker]_[cfg_scale]_[inference_step][seed].wav
+                basename = f"incomplete-{ts}_{speakers_part}_{cfg_part}_{resolved_inference_steps}_{seed_part}.wav"
+                out_path = os.path.join(tempfile.gettempdir(), basename)
+                sf.write(out_path, np.asarray(audio_int16, dtype=np.int16), sample_rate, subtype="PCM_16")
+                return out_path
+
             # Build initial log
             log = f"🎙️ Generating podcast with {num_speakers} speakers\n"
             log += f"📊 Parameters: CFG Scale={cfg_scale}, Inference Steps={resolved_inference_steps}, Seed={(resolved_seed if resolved_seed is not None else 'random')}\n"
@@ -288,7 +301,7 @@ class VibeVoiceDemo:
             # Check for stop signal
             if self.stop_generation:
                 self.is_generating = False
-                yield None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Load voice samples when voice cloning is enabled
@@ -308,7 +321,7 @@ class VibeVoiceDemo:
             # Check for stop signal
             if self.stop_generation:
                 self.is_generating = False
-                yield None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Parse script to assign speaker ID's
@@ -335,7 +348,7 @@ class VibeVoiceDemo:
             # Check for stop signal before processing
             if self.stop_generation:
                 self.is_generating = False
-                yield None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             start_time = time.time()
@@ -380,7 +393,7 @@ class VibeVoiceDemo:
                 audio_streamer.end()
                 generation_thread.join(timeout=5.0)  # Wait up to 5 seconds for thread to finish
                 self.is_generating = False
-                yield None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
 
             # Collect audio chunks as they arrive
@@ -395,6 +408,7 @@ class VibeVoiceDemo:
             # Get the stream for the first (and only) sample
             audio_stream = audio_streamer.get_stream(0)
             
+            remaining_duration_chunks = deque([5, 10, 15, 20, 25])
             has_yielded_audio = False
             has_received_chunks = False  # Track if we received any chunks at all
             
@@ -451,9 +465,15 @@ class VibeVoiceDemo:
                     total_duration = sum(len(chunk) for chunk in all_audio_chunks) / sample_rate
                     
                     log_update = log + f"🎵 Streaming: {total_duration:.1f}s generated (chunk {chunk_count})\n"
+                    if remaining_duration_chunks:
+                        if total_duration >= (remaining_duration_chunks[0] * 60):
+                            remaining_duration_chunks.popleft()
+                            path = _write_incomplete_wav(np.concatenate(all_audio_chunks), sample_rate=sample_rate)
+                            yield (sample_rate, new_audio), path,  None, log_update, gr.update(visible=True)
+                        else:
+                            yield (sample_rate, new_audio),None,  None, log_update, gr.update(visible=True)
+
                     
-                    # Yield streaming audio chunk and keep complete_audio as None during streaming
-                    yield (sample_rate, new_audio), None, log_update, gr.update(visible=True)
                     
                     # Clear pending chunks after yielding
                     pending_chunks = []
@@ -464,7 +484,7 @@ class VibeVoiceDemo:
                 final_new_audio = np.concatenate(pending_chunks)
                 total_duration = sum(len(chunk) for chunk in all_audio_chunks) / sample_rate
                 log_update = log + f"🎵 Streaming final chunk: {total_duration:.1f}s total\n"
-                yield (sample_rate, final_new_audio), None, log_update, gr.update(visible=True)
+                yield (sample_rate, final_new_audio), None, None, log_update, gr.update(visible=True)
                 has_yielded_audio = True  # Mark that we yielded audio
             
             # Wait for generation to complete (with timeout to prevent hanging)
@@ -484,7 +504,7 @@ class VibeVoiceDemo:
             
             # Check if stopped by user
             if self.stop_generation:
-                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Debug logging
@@ -506,17 +526,17 @@ class VibeVoiceDemo:
                 
                 # Yield the complete audio as a filepath so download uses our filename
                 complete_wav_path = _write_complete_wav(complete_audio, sample_rate=sample_rate)
-                yield None, complete_wav_path, final_log, gr.update(visible=False)
+                yield None, None, complete_wav_path, final_log, gr.update(visible=False)
                 return
             
             if not has_received_chunks:
                 error_log = log + f"\n❌ Error: No audio chunks were received from the model. Generation time: {generation_time:.2f}s"
-                yield None, None, error_log, gr.update(visible=False)
+                yield None, None, None, error_log, gr.update(visible=False)
                 return
             
             if not has_yielded_audio:
                 error_log = log + f"\n❌ Error: Audio was generated but not streamed. Chunk count: {chunk_count}"
-                yield None, None, error_log, gr.update(visible=False)
+                yield None, None, None, error_log, gr.update(visible=False)
                 return
 
             # Prepare the complete audio
@@ -534,10 +554,11 @@ class VibeVoiceDemo:
                 
                 # Final yield: Clear streaming audio and provide complete audio as filepath
                 complete_wav_path = _write_complete_wav(complete_audio, sample_rate=sample_rate)
-                yield None, complete_wav_path, final_log, gr.update(visible=False)
+                yield None, None, complete_wav_path, final_log, gr.update(visible=False)
+
             else:
                 final_log = log + "❌ No audio was generated."
-                yield None, None, final_log, gr.update(visible=False)
+                yield None, None, None, final_log, gr.update(visible=False)
 
         except gr.Error as e:
             # Handle Gradio-specific errors (like input validation)
@@ -545,7 +566,7 @@ class VibeVoiceDemo:
             self.current_streamer = None
             error_msg = f"❌ Input Error: {str(e)}"
             print(error_msg)
-            yield None, None, error_msg, gr.update(visible=False)
+            yield None, None, None, error_msg, gr.update(visible=False)
             
         except Exception as e:
             self.is_generating = False
@@ -554,7 +575,7 @@ class VibeVoiceDemo:
             print(error_msg)
             import traceback
             traceback.print_exc()
-            yield None, None, error_msg, gr.update(visible=False)
+            yield None, None, None, error_msg, gr.update(visible=False)
     
     def _generate_with_streamer(
         self,
@@ -809,6 +830,17 @@ Or paste text directly and it will auto-assign speakers.""",
                     elem_classes="audio-output",
                     streaming=True,  # Enable streaming mode
                     autoplay=True,
+                    buttons=[],
+                    
+                    visible=True
+                )
+
+                incomplete_audio_output = gr.Audio(
+                    label="incomplete Audio (Real-time)",
+                    type="numpy",
+                    elem_classes="audio-output",
+                    streaming=False,  # Enable streaming mode
+                    autoplay=True,
                     buttons=["download"],
                     
                     visible=True
@@ -863,7 +895,7 @@ Or paste text directly and it will auto-assign speakers.""",
                 # The generator will yield multiple times
                 final_log = "Starting generation..."
 
-                for streaming_audio, complete_audio, log, streaming_visible in demo_instance.generate_podcast_streaming(
+                for streaming_audio, incomplete_audio, complete_audio, log, streaming_visible in demo_instance.generate_podcast_streaming(
                     num_speakers=int(num_speakers),
                     script=script,
                     speaker_1=speakers[0],
@@ -880,14 +912,14 @@ Or paste text directly and it will auto-assign speakers.""",
                     # Check if we have complete audio (final yield)
                     if complete_audio is not None:
                         # Final state: clear streaming, show complete audio
-                        yield None, gr.update(value=complete_audio, visible=True), log, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+                        yield None, None, gr.update(value=complete_audio, visible=True), log, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
                     else:
                         # Streaming state: update streaming audio only
                         if streaming_audio is not None:
-                            yield streaming_audio, gr.update(visible=False), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
+                            yield streaming_audio, incomplete_audio if incomplete_audio else gr.skip(), gr.update(visible=False), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
                         else:
                             # No new audio, just update status
-                            yield None, gr.update(visible=False), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
+                            yield None, None, gr.update(visible=False), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
 
             except Exception as e:
                 error_msg = f"❌ A critical error occurred in the wrapper: {str(e)}"
@@ -895,7 +927,7 @@ Or paste text directly and it will auto-assign speakers.""",
                 import traceback
                 traceback.print_exc()
                 # Reset button states on error
-                yield None, gr.update(value=None, visible=False), error_msg, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+                yield None, None, gr.update(value=None, visible=False), error_msg, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
         
         def stop_generation_handler():
             """Handle stopping generation."""
@@ -912,7 +944,7 @@ Or paste text directly and it will auto-assign speakers.""",
         generate_btn.click(
             fn=clear_audio_outputs,
             inputs=[],
-            outputs=[audio_output, complete_audio_output],
+            outputs=[audio_output, incomplete_audio_output, complete_audio_output],
             queue=False
         ).then(  # Immediate UI update to hide Generate, show Stop (non-queued)
             fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
@@ -922,7 +954,7 @@ Or paste text directly and it will auto-assign speakers.""",
         ).then(
             fn=generate_podcast_wrapper,
             inputs=[num_speakers, script_input] + speaker_selections + [cfg_scale, inference_steps, seed, disable_voice_cloning],
-            outputs=[audio_output, complete_audio_output, log_output, streaming_status, generate_btn, stop_btn],
+            outputs=[audio_output, incomplete_audio_output, complete_audio_output, log_output, streaming_status, generate_btn, stop_btn],
             queue=True  # Enable Gradio's built-in queue
         )
         
@@ -934,9 +966,9 @@ Or paste text directly and it will auto-assign speakers.""",
             queue=False  # Don't queue stop requests
         ).then(
             # Clear both audio outputs after stopping
-            fn=lambda: (None, None),
+            fn=lambda: (None, None, None),
             inputs=[],
-            outputs=[audio_output, complete_audio_output],
+            outputs=[audio_output, incomplete_audio_output, complete_audio_output],
             queue=False
         )
         
