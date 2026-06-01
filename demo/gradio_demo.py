@@ -890,7 +890,7 @@ Or paste text directly and it will auto-assign speakers.""",
                 speakers = [speaker_1, speaker_2, speaker_3, speaker_4]
 
                 # Clear outputs and reset visibility at start
-                yield None, gr.update(value=None, visible=False), "🎙️ Starting generation...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
+                yield None, None, gr.update(value=None, visible=False), "🎙️ Starting generation...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
 
                 # The generator will yield multiple times
                 final_log = "Starting generation..."
