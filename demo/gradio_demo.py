@@ -966,7 +966,7 @@ Or paste text directly and it will auto-assign speakers.""",
             queue=False  # Don't queue stop requests
         ).then(
             # Clear both audio outputs after stopping
-            fn=lambda: (None, None, None),
+            fn=lambda: (None, gr.skip(), None),
             inputs=[],
             outputs=[audio_output, incomplete_audio_output, complete_audio_output],
             queue=False
