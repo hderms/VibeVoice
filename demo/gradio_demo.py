@@ -408,7 +408,7 @@ class VibeVoiceDemo:
             # Get the stream for the first (and only) sample
             audio_stream = audio_streamer.get_stream(0)
             
-            remaining_duration_chunks = deque([5, 10, 15, 20, 25])
+            remaining_duration_chunks = deque([5, 10, 13, 15, 18, 20, 22, 25, 27, 29])
             has_yielded_audio = False
             has_received_chunks = False  # Track if we received any chunks at all
             
@@ -840,7 +840,7 @@ Or paste text directly and it will auto-assign speakers.""",
                     type="numpy",
                     elem_classes="audio-output",
                     streaming=False,  # Enable streaming mode
-                    autoplay=True,
+                    autoplay=False,
                     buttons=["download"],
                     
                     visible=True
@@ -919,7 +919,7 @@ Or paste text directly and it will auto-assign speakers.""",
                             yield streaming_audio, incomplete_audio if incomplete_audio else gr.skip(), gr.update(visible=False), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
                         else:
                             # No new audio, just update status
-                            yield None, None, gr.skip(), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
+                            yield None, None, None, log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
 
             except Exception as e:
                 error_msg = f"❌ A critical error occurred in the wrapper: {str(e)}"
