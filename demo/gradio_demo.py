@@ -301,7 +301,7 @@ class VibeVoiceDemo:
             # Check for stop signal
             if self.stop_generation:
                 self.is_generating = False
-                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Load voice samples when voice cloning is enabled
@@ -321,7 +321,7 @@ class VibeVoiceDemo:
             # Check for stop signal
             if self.stop_generation:
                 self.is_generating = False
-                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Parse script to assign speaker ID's
@@ -348,7 +348,7 @@ class VibeVoiceDemo:
             # Check for stop signal before processing
             if self.stop_generation:
                 self.is_generating = False
-                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, None,  "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             start_time = time.time()
@@ -393,7 +393,7 @@ class VibeVoiceDemo:
                 audio_streamer.end()
                 generation_thread.join(timeout=5.0)  # Wait up to 5 seconds for thread to finish
                 self.is_generating = False
-                yield None, None, "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
 
             # Collect audio chunks as they arrive
