@@ -692,6 +692,7 @@ def create_demo_interface(demo_instance: VibeVoiceDemo):
             # Left column - Settings
             with gr.Column(scale=1, elem_classes="settings-card"):
                 gr.Markdown("### **Podcast Settings**")
+                test_skip = gr.Button("Test skip")
                 
                 # Number of speakers
                 num_speakers = gr.Slider(
@@ -939,6 +940,12 @@ Or paste text directly and it will auto-assign speakers.""",
         def clear_audio_outputs():
             """Clear both audio outputs before starting new generation."""
             return None, None, gr.update(value=None, visible=False)
+        test_skip.click(
+            fn = lambda : (gr.skip()),
+            inputs=[],
+            outputs=[test_skip]
+
+        )
 
         # Connect generation button with streaming outputs
         generate_btn.click(
