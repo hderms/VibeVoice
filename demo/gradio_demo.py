@@ -531,12 +531,12 @@ class VibeVoiceDemo:
             
             if not has_received_chunks:
                 error_log = log + f"\n❌ Error: No audio chunks were received from the model. Generation time: {generation_time:.2f}s"
-                yield None, None, gr.skip(), error_log, gr.update(visible=False)
+                yield None, None, gr.skip(), error_log, gr.Button(visible=False)
                 return
             
             if not has_yielded_audio:
                 error_log = log + f"\n❌ Error: Audio was generated but not streamed. Chunk count: {chunk_count}"
-                yield None, None, gr.skip(), error_log, gr.update(visible=False)
+                yield None, None, gr.skip(), error_log, gr.Button(visible=False)
                 return
 
             # Prepare the complete audio
@@ -554,11 +554,11 @@ class VibeVoiceDemo:
                 
                 # Final yield: Clear streaming audio and provide complete audio as filepath
                 complete_wav_path = _write_complete_wav(complete_audio, sample_rate=sample_rate)
-                yield None, gr.skip(), complete_wav_path, final_log, gr.update(visible=False)
+                yield None, gr.skip(), complete_wav_path, final_log, gr.Button(visible=False)
 
             else:
                 final_log = log + "❌ No audio was generated."
-                yield None, None, None, final_log, gr.update(visible=False)
+                yield None, None, None, final_log, gr.Button(visible=False)
 
         except gr.Error as e:
             # Handle Gradio-specific errors (like input validation)
@@ -891,7 +891,7 @@ Or paste text directly and it will auto-assign speakers.""",
                 speakers = [speaker_1, speaker_2, speaker_3, speaker_4]
 
                 # Clear outputs and reset visibility at start
-                yield None, None, gr.update(value=None, visible=False), "🎙️ Starting generation...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
+                yield None, None, gr.Audio(value=None, visible=False), "🎙️ Starting generation...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
 
                 # The generator will yield multiple times
                 final_log = "Starting generation..."
@@ -913,14 +913,14 @@ Or paste text directly and it will auto-assign speakers.""",
                     # Check if we have complete audio (final yield)
                     if complete_audio is not None:
                         # Final state: clear streaming, show complete audio
-                        yield None, None, gr.update(value=complete_audio, visible=True), log, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+                        yield None, None, gr.Audio(value=complete_audio, visible=True), log, gr.HTML(visible=False), gr.Button(visible=True), gr.Button(visible=False)
                     else:
                         # Streaming state: update streaming audio only
                         if streaming_audio is not None:
-                            yield streaming_audio, incomplete_audio if incomplete_audio else gr.skip(), gr.update(visible=False), log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
+                            yield streaming_audio, incomplete_audio if incomplete_audio else gr.skip(), gr.Audio(visible=False), log, streaming_visible, gr.Button(visible=False), gr.Button(visible=True)
                         else:
                             # No new audio, just update status
-                            yield None, None, None, log, streaming_visible, gr.update(visible=False), gr.update(visible=True)
+                            yield None, None, None, log, streaming_visible, gr.Button(visible=False), gr.Button(visible=True)
 
             except Exception as e:
                 error_msg = f"❌ A critical error occurred in the wrapper: {str(e)}"
@@ -928,18 +928,18 @@ Or paste text directly and it will auto-assign speakers.""",
                 import traceback
                 traceback.print_exc()
                 # Reset button states on error
-                yield None, None, gr.update(value=None, visible=False), error_msg, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+                yield None, None, gr.Audio(value=None, visible=False), error_msg, gr.HTML(visible=False), gr.Button(visible=True), gr.Button(visible=False)
         
         def stop_generation_handler():
             """Handle stopping generation."""
             demo_instance.stop_audio_generation()
             # Return values for: log_output, streaming_status, generate_btn, stop_btn
-            return "🛑 Generation stopped.", gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+            return "🛑 Generation stopped.", gr.HTML(visible=False), gr.Button(visible=True), gr.Button(visible=False)
         
         # Add a clear audio function
         def clear_audio_outputs():
             """Clear both audio outputs before starting new generation."""
-            return None, None, gr.update(value=None, visible=False)
+            return None, None, gr.Audio(value=None, visible=False)
         test_skip.click(
             fn = lambda : (gr.skip()),
             inputs=[],
@@ -973,7 +973,7 @@ Or paste text directly and it will auto-assign speakers.""",
             queue=False  # Don't queue stop requests
         ).then(
             # Clear both audio outputs after stopping
-            fn=lambda: (None, gr.skip(), None),
+            fn=lambda: (None, None, None),
             inputs=[],
             outputs=[audio_output, incomplete_audio_output, complete_audio_output],
             queue=False
