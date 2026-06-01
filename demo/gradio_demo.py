@@ -321,7 +321,7 @@ class VibeVoiceDemo:
             # Check for stop signal
             if self.stop_generation:
                 self.is_generating = False
-                yield None, gr.skip(), gr.skip(), "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, gr.skip(), None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Parse script to assign speaker ID's
@@ -393,7 +393,7 @@ class VibeVoiceDemo:
                 audio_streamer.end()
                 generation_thread.join(timeout=5.0)  # Wait up to 5 seconds for thread to finish
                 self.is_generating = False
-                yield None, gr.skip(), gr.skip(), "🛑 Generation stopped by user", gr.update(visible=False)
+                yield None, gr.skip(), None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
 
             # Collect audio chunks as they arrive
@@ -469,7 +469,7 @@ class VibeVoiceDemo:
                         if total_duration >= (remaining_duration_chunks[0] * 60):
                             remaining_duration_chunks.popleft()
                             path = _write_incomplete_wav(np.concatenate(all_audio_chunks), sample_rate=sample_rate)
-                            yield (sample_rate, new_audio), path,  gr.skip(), log_update, gr.update(visible=True)
+                            yield (sample_rate, new_audio), path,  None, log_update, gr.update(visible=True)
                         else:
                             yield (sample_rate, new_audio),gr.skip(),  None, log_update, gr.update(visible=True)
 
@@ -484,7 +484,7 @@ class VibeVoiceDemo:
                 final_new_audio = np.concatenate(pending_chunks)
                 total_duration = sum(len(chunk) for chunk in all_audio_chunks) / sample_rate
                 log_update = log + f"🎵 Streaming final chunk: {total_duration:.1f}s total\n"
-                yield (sample_rate, final_new_audio), None, None, log_update, gr.update(visible=True)
+                yield (sample_rate, final_new_audio), gr.skip(), None, log_update, gr.update(visible=True)
                 has_yielded_audio = True  # Mark that we yielded audio
             
             # Wait for generation to complete (with timeout to prevent hanging)
@@ -504,7 +504,8 @@ class VibeVoiceDemo:
             
             # Check if stopped by user
             if self.stop_generation:
-                yield None, None, gr.skip(), "🛑 Generation stopped by user", gr.update(visible=False)
+                print("Stopping generation")
+                yield None, None, None, "🛑 Generation stopped by user", gr.update(visible=False)
                 return
             
             # Debug logging
@@ -531,12 +532,12 @@ class VibeVoiceDemo:
             
             if not has_received_chunks:
                 error_log = log + f"\n❌ Error: No audio chunks were received from the model. Generation time: {generation_time:.2f}s"
-                yield None, None, gr.skip(), error_log, gr.Button(visible=False)
+                yield None, None, None, error_log, gr.Button(visible=False)
                 return
             
             if not has_yielded_audio:
                 error_log = log + f"\n❌ Error: Audio was generated but not streamed. Chunk count: {chunk_count}"
-                yield None, None, gr.skip(), error_log, gr.Button(visible=False)
+                yield None, None, None, error_log, gr.Button(visible=False)
                 return
 
             # Prepare the complete audio
