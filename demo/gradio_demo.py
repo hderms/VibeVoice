@@ -1091,7 +1091,8 @@ def main():
             share=args.share,
             # server_port=args.port,
             server_name="0.0.0.0" if args.share else "127.0.0.1",
-            show_error=True
+            show_error=True,
+            debug=True
         )
     except KeyboardInterrupt:
         print("\n🛑 Shutting down gracefully...")
