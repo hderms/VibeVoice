@@ -555,11 +555,11 @@ class VibeVoiceDemo:
                 
                 # Final yield: Clear streaming audio and provide complete audio as filepath
                 complete_wav_path = _write_complete_wav(complete_audio, sample_rate=sample_rate)
-                yield None, gr.skip(), complete_wav_path, final_log, gr.Button(visible=False)
+                yield None, gr.skip(), complete_wav_path, final_log, gr.update(visible=False)
 
             else:
                 final_log = log + "❌ No audio was generated."
-                yield None, None, None, final_log, gr.Button(visible=False)
+                yield None, None, None, final_log, gr.update(visible=False)
 
         except gr.Error as e:
             # Handle Gradio-specific errors (like input validation)
@@ -833,7 +833,7 @@ Or paste text directly and it will auto-assign speakers.""",
                     elem_classes="audio-output",
                     streaming=True,  # Enable streaming mode
                     autoplay=True,
-                    buttons=[],
+                    buttons=["download"],
                     
                     visible=True
                 )
