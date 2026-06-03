@@ -402,8 +402,8 @@ class VibeVoiceDemo:
             pending_chunks = []  # Buffer for accumulating small chunks
             chunk_count = 0
             last_yield_time = time.time()
-            min_yield_interval = 15 # Yield every 15 seconds
-            min_chunk_size = sample_rate * 10 # At least 2 seconds of audio
+            min_yield_interval = 10 # Yield every 15 seconds
+            min_chunk_size = sample_rate * 20 # At least 2 seconds of audio
             
             # Get the stream for the first (and only) sample
             audio_stream = audio_streamer.get_stream(0)
